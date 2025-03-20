@@ -1,5 +1,3 @@
-# Pytorch
-
 import numpy as np
 import random
 from collections import namedtuple, deque
@@ -11,70 +9,26 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.nn.utils.prune as prune
 from torchvision.models.feature_extraction import create_feature_extractor
-
-from decision_network.decoder import Decoder
-from decision_network.encoder import Encoder
-from decision_network.rnn import RNN
+from torcheval.metrics.functional import multiclass_accuracy
 
 from decision_network.encoder_change_dims import ChangeDims
-import logging
+from decision_network.DQN import DQN
 
-import CONSTANTS
+from utils import get_device
+
+from CONSTANTS import EPSILON_END, EPSILON_START, NUM_EPISODES, BATCH_SIZE, K, ALPHA, PENALTY, NUM_CNN_LAYERS, GAMMA, LEARNING_RATE_DQN, TAU
 
 # if GPU is to be used
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-torch.autograd.set_detect_anomaly(True)
-
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
-
-class ReplayMemory(object):
-
-    def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
-
-    def push(self, *args):
-        """Save a transition"""
-        self.memory.append(Transition(*args))
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-    
-class DQN(nn.Module):
-    def __init__(self, n_observations):
-        super(DQN, self).__init__()
-        self.layer1 = Encoder(in_dims=n_observations)
-        self.layer2 = RNN(hidden_dim=CONSTANTS.RNN_hidden_size)
-        self.layer3 = Decoder(output_dim=CONSTANTS.K)
-
-    # Called with either one element to determine next action, or a batch
-    # during optimization. Returns tensor([[left0exp,right0exp]...]).
-    def forward(self, x):
-        # input 32x32, output 32x64
-        # print("input:", x.shape)
-        # print(x)
-        x = self.layer1(x)
-        x = x.unsqueeze(2)
-
-        # print("Output1:", x.shape)
-
-        # input 64x64x1, output 64x32
-        x = self.layer2(x)
-        # print("Output2:", x.shape)
-
-        # input 32x32, output 32xK       
-        return self.layer3(x)
+device = get_device()
+# torch.autograd.set_detect_anomaly(True)
 
 steps_done = 0
-
 # e-greedy linear annealing
 # CHECK WHETHER BATCH ITERATE OR ALL TOGETHER
 def select_action(state, policy_net):
     global steps_done
     sample = random.random()
-    eps_threshold = CONSTANTS.epsilon_end - (CONSTANTS.epsilon_start - CONSTANTS.epsilon_end)*steps_done/CONSTANTS.num_episodes
+    eps_threshold = EPSILON_END - (EPSILON_START - EPSILON_END)*steps_done/NUM_EPISODES
     steps_done += 1
 
     if sample > eps_threshold:
@@ -89,12 +43,10 @@ def select_action(state, policy_net):
             return x
     else:
         # NOT SURE ABOUT LOW AND HIGH. NEED TO CHECK
-        x = np.random.randint(low = 1, high = CONSTANTS.K, size=(CONSTANTS.batch_size))
-        return torch.tensor(x, device=device)
+        return torch.randint(low = 1, high = K, size=(BATCH_SIZE,), device = device)
 
-
-def reward_func(action, cur_CNN_layer, alpha = CONSTANTS.alpha, p = CONSTANTS.p, L_cls = None):
-    if cur_CNN_layer == CONSTANTS.num_CNN_layers - 2:
+def reward_func(action, cur_CNN_layer, alpha = ALPHA, p = PENALTY, L_cls = None):
+    if cur_CNN_layer == NUM_CNN_LAYERS - 2:
         reward = -alpha*L_cls + (action)*p
     else:
         reward = (action) * p
@@ -109,15 +61,11 @@ def optimize_model(state_batch, next_state_batch, reward_batch, action_batch, po
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
     change_dim = ChangeDims(next_state_batch.shape[1], out_dims=state_batch.shape[1]).to(device)
-
     next_state_batch = change_dim(next_state_batch)
-
-    # print("next_state_batch: ", next_state_batch.shape)
-
     next_state_values = target_net(next_state_batch).max(1).values
 
     # Compute the expected Q values
-    expected_state_action_values = (next_state_values * CONSTANTS.gamma) + reward_batch
+    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
     # Compute Huber loss
     state_action_values = state_action_values.squeeze()
@@ -130,6 +78,7 @@ def optimize_model(state_batch, next_state_batch, reward_batch, action_batch, po
     # Optimize the model
     optimizer.zero_grad()
     loss.backward()
+
     # In-place gradient clipping
     torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
     optimizer.step()
@@ -153,16 +102,11 @@ def prune_and_get_next_state(cnn_model, action, inputs, layer_name, output_layer
                 module_to_prune = module
 
         # Perform pruning
-        try:
-            type(a.item())
-        except:
-            print("Cur Action:", a)
         for name, module in cnn_model.named_buffers():
             if name == f'{layer_name}.weight_mask':
                 num_of_channels = module.shape[0]
 
-                group_size = num_of_channels/CONSTANTS.K
-                # print(round(group_size*a.item()))
+                group_size = num_of_channels/K
                 x = torch.ones(round(group_size*a.item()), *module.shape[1:])
                 y = torch.zeros(num_of_channels - round(group_size*a.item()), *module.shape[1:])
                 x = torch.cat((x,y), dim=0).to(device)
@@ -170,13 +114,10 @@ def prune_and_get_next_state(cnn_model, action, inputs, layer_name, output_layer
                 module_to_prune.register_buffer(name='weight_mask', tensor=x, persistent=True)
 
         # Generate next state
-        next_state = intermed_model(inputs[ind])
-        next_state = next_state[output_layer_name]
+        next_state = intermed_model(inputs[ind])[output_layer_name]
 
         next_state = nn.functional.avg_pool2d(next_state, next_state.size()[2:]).squeeze()
-
         next_state_batch.append(next_state.cpu().detach())
-
     return torch.stack(next_state_batch, dim=0).to(device)
 
 def driver(trainloader, cnn_model, cur_CNN_layer, layer_names, conv_layers, L_cls = None):
@@ -202,12 +143,12 @@ def driver(trainloader, cnn_model, cur_CNN_layer, layer_names, conv_layers, L_cl
     
     target_net.load_state_dict(policy_net.state_dict())
 
-    optimizer = optim.AdamW(policy_net.parameters(), lr=CONSTANTS.learning_rate, amsgrad=True)
+    optimizer = optim.AdamW(policy_net.parameters(), lr=LEARNING_RATE_DQN, amsgrad=True)
 
-    episode_durations = []
     mean_L = []
     mean_list=[]
-    for j in tqdm(range(CONSTANTS.num_episodes)):
+    mean_acc = []
+    for j in tqdm(range(NUM_EPISODES)):
         # Initialize the environment and get its state
         inputs, classes = next(iter(trainloader))
 
@@ -227,12 +168,14 @@ def driver(trainloader, cnn_model, cur_CNN_layer, layer_names, conv_layers, L_cl
         next_states = prune_and_get_next_state(cnn_model, action, inputs, conv_layers[cur_CNN_layer+1], layer_names[cur_CNN_layer + 1])
 
         # Calculate L_cls if last layer
-        if cur_CNN_layer == CONSTANTS.num_CNN_layers - 2:
+        if cur_CNN_layer == NUM_CNN_LAYERS - 2:
             loss_fn = nn.CrossEntropyLoss()
             y_pred = cnn_model(inputs.to(device))
             loss_cnn = loss_fn(y_pred, classes.to(device))
             L_cls = loss_cnn.item()
+            model_acc = multiclass_accuracy(y_pred, classes.to(device))
             mean_L.append(L_cls)
+            mean_acc.append(model_acc)
 
         # Compute corresponding rewards
         reward = reward_func(action, cur_CNN_layer, L_cls=L_cls)
@@ -247,16 +190,14 @@ def driver(trainloader, cnn_model, cur_CNN_layer, layer_names, conv_layers, L_cl
         policy_net_state_dict = policy_net.state_dict()
 
         for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key]*CONSTANTS.TAU + target_net_state_dict[key]*(1-CONSTANTS.TAU)
+            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
 
         target_net.load_state_dict(target_net_state_dict)
 
-    if len(mean_L) > 0:
-        print("Mean L_cls=", sum(mean_L)/len(mean_L))
-
-    output_img_size = 32 if cur_CNN_layer != 2 else 16
-    group_size = getattr(cnn_model, f"conv{{}}".format(layer_names[cur_CNN_layer+1][-1])).in_channels/CONSTANTS.K
-    in_channels_mean = group_size * sum(mean_list)/len(mean_list)
+    output_img_size = 32
+    group_size = getattr(cnn_model, f"conv{{}}".format(layer_names[cur_CNN_layer+1][-1])).in_channels/K
+    in_channels_mean = group_size * sum(mean_list)//len(mean_list)
+    
     multiplications = getattr(cnn_model, f"conv{{}}".format(layer_names[cur_CNN_layer+1][-1])).kernel_size[0]\
                       *getattr(cnn_model, f"conv{{}}".format(layer_names[cur_CNN_layer+1][-1])).kernel_size[1]\
                       *in_channels_mean\
