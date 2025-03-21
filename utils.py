@@ -7,9 +7,10 @@ from torch import cuda, device, manual_seed
 
 def load_dataset(root='./data'):
     """
-    Load CIFAR-10 dataset and create DataLoader objects for training and testing.
+    Load dataset and create DataLoader objects for training and testing.
 
     Args:
+    dataset (str): Datset to use. Default is FashionMNIST.
         root (str): Root directory where the dataset will be stored. Default is './data'.
 
     Returns:
@@ -18,8 +19,8 @@ def load_dataset(root='./data'):
     """
     transform = transforms.Compose([transforms.ToTensor()])  # Convert images to PyTorch tensors
 
-    trainset = datasets.CIFAR10(root=root, train=True, download=True, transform=transform)
-    testset = datasets.CIFAR10(root=root, train=False, download=True, transform=transform)
+    trainset = datasets.FashionMNIST(root=root, train=True, download=True, transform=transform)
+    testset = datasets.FashionMNIST(root=root, train=False, download=True, transform=transform)
 
     # Create separate DataLoaders for training and testing sets
     trainloader = DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)

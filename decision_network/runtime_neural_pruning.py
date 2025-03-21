@@ -1,3 +1,4 @@
+import math
 import random
 from tqdm import tqdm
 
@@ -9,7 +10,7 @@ import torch.nn.utils.prune as prune
 from decision_network.DQN import DQN
 from utils import get_device, get_multiplications_per_conv_layer
 
-from CONSTANTS import EPSILON_END, EPSILON_START, FINETUNE_STEPS, LEARNING_RATE_CNN, MOMENTUM, NUM_EPISODES, BATCH_SIZE, K, ALPHA, PENALTY, NUM_CNN_LAYERS, GAMMA, LEARNING_RATE_DQN, TAU
+from CONSTANTS import EPSILON_DECAY, EPSILON_END, EPSILON_START, FINETUNE_STEPS, LEARNING_RATE_CNN, MOMENTUM, NUM_EPISODES, BATCH_SIZE, K, ALPHA, PENALTY, NUM_CNN_LAYERS, GAMMA, LEARNING_RATE_DQN, TAU
 # torch.autograd.set_detect_anomaly(True)
 
 class ReinforcementLearning():
@@ -42,9 +43,8 @@ class ReinforcementLearning():
             return actions, cur_hidden_state
 
     def _e_greedy_actions(self, state, layer_idx):
-        eps_threshold = EPSILON_END - (EPSILON_START - EPSILON_END) * self.steps_done / NUM_EPISODES
-        self.steps_done += 1
-
+        eps_threshold = EPSILON_END + (EPSILON_START - EPSILON_END) * math.exp(-1. * self.steps_done / EPSILON_DECAY)
+        
         if random.random() > eps_threshold:
             return self._predict_action(state, layer_idx)[0]
         return torch.randint(low = 1, high = K, size=(BATCH_SIZE,), device = self.device)
@@ -86,14 +86,15 @@ class ReinforcementLearning():
     def _prune_and_get_next_state(self, action, inputs, cur_layer_idx):
         next_state_batch = []
 
+         # Prune specific channels in the desired layers
+        module_to_prune = None
+        for name, module in self.cnn_model.named_modules():
+            if name == self.conv_layers[cur_layer_idx]:
+                prune.identity(module, name='weight')
+                module_to_prune = module
+                break
+
         for ind, a in enumerate(action):
-            # Prune specific channels in the desired layers
-            module_to_prune = None
-            for name, module in self.cnn_model.named_modules():
-                if name == self.conv_layers[cur_layer_idx]:
-                    prune.identity(module, name='weight')
-                    module_to_prune = module
-            
             # Perform pruning
             for name, module in self.cnn_model.named_buffers():
                 if name == f'{self.conv_layers[cur_layer_idx]}.weight_mask':
@@ -105,7 +106,7 @@ class ReinforcementLearning():
                     x = torch.cat((x,y), dim=0).to(self.device)
                     
                     module_to_prune.register_buffer(name='weight_mask', tensor=x, persistent=True)
-
+                    
             # Generate next state
             next_state = self._continue_forward_pass(inputs[ind], self.conv_layers[cur_layer_idx], self.return_nodes[cur_layer_idx])
             next_state_batch.append(next_state.cpu().detach())
@@ -223,8 +224,9 @@ class ReinforcementLearning():
         print("="*50)
         print("Training Deep Q Network!")
         track_loss = []
-        
+        self.steps_done = 0
         for _ in tqdm(range(NUM_EPISODES)):
+            self.steps_done += 1
             # Initialize the environment and get its state
             try:
                 inputs, classes = next(self.train_iterator)
@@ -270,6 +272,7 @@ class ReinforcementLearning():
                 )
             
             self._soft_update_target_network()
+
         return track_loss
 
     def finetune_cnn(self):
