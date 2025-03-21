@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch
 
 class CNNModel(nn.Module):
     def __init__(self):
@@ -46,7 +45,7 @@ class CNNModel(nn.Module):
 
         # input 32x32x32, output 32x16x16
         x = self.pool(x)
-        
+
         # input 32x16x16, output 8192
         x = self.flat(x)
         x = self.act5(x)

@@ -14,7 +14,7 @@ EPSILON_START = 1.0  # exploration probability at start
 EPSILON_END = 0.1  # minimum exploration probability
 EPSILON_DECAY = 1000  # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 GAMMA = 0.999 # discount factor
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 LEARNING_RATE_DQN = 1e-4
 ALPHA = 0.1 # to rescale Lcls into a proper range, since it varies for different networks and tasks. α was set such that the average αLcls is approximately 1
 PENALTY = -0.1 # negative penalty that can be manually set
@@ -28,4 +28,4 @@ MOMENTUM = 0.9
 LEARNING_RATE_CNN = 0.001 # Learning rate for the CNN optimizer
 FEATURE_MAP_SIZE = 32
 # CNN Finetune
-FINETUNE_STEPS = 5000
+FINETUNE_STEPS = 3000

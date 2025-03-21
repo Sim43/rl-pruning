@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from CONSTANTS import RNN_HIDDEN_SIZE, K, ENCODED_DIMS, RNN_OUTPUT_DIMS, BATCH_SIZE
-from utils import get_device
+from CONSTANTS import RNN_HIDDEN_SIZE, K, ENCODED_DIMS
 
 class DQN(nn.Module):
     def __init__(self, layer_channels, embedding_size = ENCODED_DIMS, rnn_hidden_size= RNN_HIDDEN_SIZE, num_actions = K):

@@ -22,8 +22,8 @@ def load_dataset(root='./data'):
     testset = datasets.CIFAR10(root=root, train=False, download=True, transform=transform)
 
     # Create separate DataLoaders for training and testing sets
-    trainloader = DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True)
-    testloader = DataLoader(testset, batch_size=BATCH_SIZE, shuffle=True)
+    trainloader = DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
+    testloader = DataLoader(testset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
     print(f"The train set contains {len(trainloader)} batches and test set contains {len(testloader)} batches")
     return trainloader, testloader
