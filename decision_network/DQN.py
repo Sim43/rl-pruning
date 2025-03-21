@@ -1,67 +1,42 @@
-import torch.nn as nn
-import CONSTANTS
 import torch
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+import torch.nn as nn
+from CONSTANTS import RNN_HIDDEN_SIZE, K, ENCODED_DIMS, RNN_OUTPUT_DIMS, BATCH_SIZE
+from utils import get_device
 
 class DQN(nn.Module):
-    def __init__(self, n_observations):
+    def __init__(self, layer_channels, embedding_size = ENCODED_DIMS, rnn_hidden_size= RNN_HIDDEN_SIZE, num_actions = K):
         super(DQN, self).__init__()
-        self.layer1 = Encoder(in_dims=n_observations)
-        self.layer2 = RNN(hidden_dim=CONSTANTS.RNN_hidden_size)
-        self.layer3 = Decoder(output_dim=CONSTANTS.K)
+        # Encoder layers (one per feature map)
+        self.encoders = nn.ModuleList([
+            nn.Linear(nc, embedding_size) for nc in layer_channels
+        ])
+        # RNN to process embeddings sequentially
+        self.rnn = nn.GRU(embedding_size, rnn_hidden_size, batch_first=True)
+        # Decoder to produce Q-values
+        self.decoder = nn.Linear(rnn_hidden_size, num_actions)
 
-    # Called with either one element to determine next action, or a batch
-    # during optimization. Returns tensor([[left0exp,right0exp]...]).
-    def forward(self, x):
-        # input 32x32, output 32x64
-        x = self.layer1(x)
-        x = x.unsqueeze(2)
-
-        # input 64x64x1, output 64x32
-        x = self.layer2(x)
-
-        # input 32x32, output 32xK       
-        return self.layer3(x)
-
-class Encoder(nn.Module):
-    def __init__(self, in_dims, out_dims = CONSTANTS.encoded_dims):
-        super().__init__()
-        self.fc = nn.Linear(in_dims, out_dims)
-        self.act = nn.ReLU()
-
-    def forward(self, x):
-        # input 2048, output 128
-        x = self.act(self.fc(x))
-        return x
-    
-class Decoder(nn.Module):
-    def __init__(self, output_dim):
-        super().__init__()
-        self.fc = nn.Linear(CONSTANTS.RNN_output_dims, output_dim)
-        self.act = nn.ReLU()
-
-    def forward(self, x):
-        x = self.act(self.fc(x))
-        return x
-    
-class RNN(nn.Module):
-    """
-    This RNN is inspired from https://www.kaggle.com/code/kanncaa1/recurrent-neural-network-with-pytorch
-    
-    """
-    def __init__(self, hidden_dim):
-        super(RNN, self).__init__()
-        self.rnn = nn.RNN(1, CONSTANTS.RNN_hidden_size, CONSTANTS.RNN_num_layers, batch_first=True, nonlinearity='relu')
+    def forward(self, feature_map, layer_idx, prev_rnn_hidden_state):
+        """
+        Forward pass for a single feature map.
+        Args:
+            feature_map: A single feature map of shape [batch, channels, height, width].
+            layer_idx: Index of the current layer (used to select the correct encoder).
+        """
+        # Global average pooling
+        pooled = nn.functional.adaptive_avg_pool2d(feature_map, (1, 1)).squeeze()  # [batch, channels]
         
-        # Readout layer
-        self.fc = nn.Linear(hidden_dim, CONSTANTS.RNN_output_dims)
-    
-    def forward(self, x):
-        # Initialize hidden state with zeros
-        h0 = torch.autograd.Variable(torch.zeros(CONSTANTS.RNN_num_layers, x.size(0), CONSTANTS.RNN_hidden_size)).to(device)
+        # Project to embedding size using the corresponding encoder
+        embedding = self.encoders[layer_idx](pooled)  # [batch, embedding_size]
+        embedding = embedding.unsqueeze(1)  # [batch, 1, embedding_size] for RNN input
         
-        # One time step
-        out, _ = self.rnn(x, h0)
-        out = self.fc(out[:, -1, :]) 
-        return out
+        # Process through RNN
+        if prev_rnn_hidden_state is None:
+            prev_rnn_hidden_state = torch.zeros(1, embedding.size(0), self.rnn.hidden_size,
+                                      device=embedding.device, dtype=embedding.dtype)
+
+        _, new_hidden = self.rnn(embedding, prev_rnn_hidden_state)
+        
+        # Use final hidden state to compute Q-values
+        q_values = self.decoder(new_hidden.squeeze(0))  # [batch, num_actions]
+
+        return q_values, new_hidden

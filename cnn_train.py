@@ -7,7 +7,6 @@ import torch.optim as optim
 
 from CONSTANTS import EPOCHS_CNN, MOMENTUM, LEARNING_RATE_CNN
 from cnn import CNNModel
-from utils import load_dataset
 
 def train_cnn(model, trainloader, testloader, device, epochs = EPOCHS_CNN, lr=LEARNING_RATE_CNN, momentum=MOMENTUM):
     """

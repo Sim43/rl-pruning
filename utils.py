@@ -2,7 +2,7 @@ import random
 import numpy as np
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
-from CONSTANTS import SEED, BATCH_SIZE
+from CONSTANTS import FEATURE_MAP_SIZE, SEED, BATCH_SIZE
 from torch import cuda, device, manual_seed
 
 def load_dataset(root='./data'):
@@ -25,6 +25,7 @@ def load_dataset(root='./data'):
     trainloader = DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True)
     testloader = DataLoader(testset, batch_size=BATCH_SIZE, shuffle=True)
 
+    print(f"The train set contains {len(trainloader)} batches and test set contains {len(testloader)} batches")
     return trainloader, testloader
 
 def get_device():
@@ -57,7 +58,7 @@ def set_random_seed(seed = SEED):
 
     print(f"Random seed set to {seed}")
 
-def get_multiplications_per_conv_layer(conv_layer, output_img_size = 32):
+def get_multiplications_per_conv_layer(conv_layer, output_img_size = FEATURE_MAP_SIZE, in_channels = None):
     """
     Calculate the number of multiplications in a given convolutional layer.
 
@@ -68,4 +69,6 @@ def get_multiplications_per_conv_layer(conv_layer, output_img_size = 32):
     Returns:
         int: The total number of multiplications performed in the given convolutional layer.
     """
-    return conv_layer.kernel_size[0] * conv_layer.kernel_size[1] * conv_layer.in_channels * conv_layer.out_channels * (output_img_size ** 2)
+    if in_channels == None:
+        in_channels = conv_layer.in_channels
+    return conv_layer.kernel_size[0] * conv_layer.kernel_size[1] * in_channels * conv_layer.out_channels * (output_img_size ** 2)

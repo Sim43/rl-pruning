@@ -1,10 +1,9 @@
 import pandas as pd
-from CONSTANTS import EPOCHS_FINETUNE, NUM_CNN_LAYERS, SEED
+from CONSTANTS import NUM_CNN_LAYERS, SEED
 
-from decision_network import train_decision_network
 from utils import get_multiplications_per_conv_layer, load_dataset, get_device, set_random_seed
-from cnn_train import get_trained_CNN_model, train_cnn
-
+from cnn_train import get_trained_CNN_model
+from decision_network.runtime_neural_pruning import ReinforcementLearning
 from tabulate import tabulate
 
 class RuntimeNeuralPruning:
@@ -32,6 +31,7 @@ class RuntimeNeuralPruning:
         self.multiplications_per_layer = [[0, 0] for _ in range(NUM_CNN_LAYERS)]
         self.multiplications_original_model = 0
         self.multiplications_pruned_model = 0
+        self.decision_network_trainer = ReinforcementLearning(self.model, self.trainloader, self.testloader, self.return_nodes, self.conv_layers, self.device)
 
     def calculate_original_model_multiplications(self):
         for ind, layer_name in enumerate(self.conv_layers):
@@ -39,31 +39,25 @@ class RuntimeNeuralPruning:
 
             self.multiplications_per_layer[ind][0] = get_multiplications_per_conv_layer(conv_layer)
             self.multiplications_original_model += self.multiplications_per_layer[ind][0]
-
         # print("Total multiplications for full model for one batch:", self.multiplications_original_model)
 
     def prune_and_finetune_model(self):
         """
         Perform Runtime Neural Pruning and model finetuning in an interleaving fashion.
         """
-        first_conv_layer = getattr(self.model, self.conv_layers[0])
-
-        self.multiplications_pruned_model = get_multiplications_per_conv_layer(first_conv_layer)
-        self.multiplications_per_layer[0][1] = self.multiplications_pruned_model
-
-        accuracy = 0
-        for i in range(NUM_CNN_LAYERS - 1):
-            self.multiplications_per_layer[i+1][1] = train_decision_network.driver(self.trainloader, self.model, i, self.return_nodes, self.conv_layers)
-            self.multiplications_pruned_model += self.multiplications_per_layer[i+1][1]
+        for i in range(1, NUM_CNN_LAYERS):
+            self.decision_network_trainer.train_q_network(i)
 
             # If it's the last Conv layer, we need to fine-tune the model for a longer period
             # to ensure the model converges properly after pruning
-            if i == NUM_CNN_LAYERS - 2:
-                accuracy = train_cnn(self.model, self.trainloader, self.testloader, self.device, EPOCHS_FINETUNE*4)
-            else:
-                train_cnn(self.model, self.trainloader, self.testloader, self.device, EPOCHS_FINETUNE)
-        return accuracy
+            self.decision_network_trainer.finetune_cnn()
     
+    def test_models(self):
+        self.acc_pruned_model, pruned_model_multiplications = self.decision_network_trainer.test_cnn_model_with_runtime_pruning()
+        for ind, multis in enumerate(pruned_model_multiplications):
+            self.multiplications_pruned_model += multis
+            self.multiplications_per_layer[ind][1] = multis
+
     def display_results(self):
         """
         Display the comparison table of multiplications between the original and pruned model.
@@ -89,7 +83,8 @@ class RuntimeNeuralPruning:
         Run the pruning pipeline.
         """
         self.calculate_original_model_multiplications()
-        self.acc_pruned_model = self.prune_and_finetune_model()
+        self.prune_and_finetune_model()
+        self.test_models()
         self.display_results()
     
 if __name__ == "__main__":
