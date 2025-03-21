@@ -30,7 +30,7 @@ class DQN(nn.Module):
         
         # Process through RNN
         if prev_rnn_hidden_state is None:
-            print("DQN Device:", embedding.device)
+            # print("DQN Device:", embedding.device)
             prev_rnn_hidden_state = torch.zeros(1, embedding.size(0), self.rnn.hidden_size,
                                       device=embedding.device, dtype=embedding.dtype)
 

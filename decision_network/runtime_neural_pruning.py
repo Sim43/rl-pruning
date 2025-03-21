@@ -8,9 +8,9 @@ import torch.optim as optim
 import torch.nn.utils.prune as prune
 
 from decision_network.DQN import DQN
-from utils import get_device, get_multiplications_per_conv_layer
+from utils import get_multiplications_per_conv_layer
 
-from CONSTANTS import EPSILON_DECAY, EPSILON_END, EPSILON_START, FINETUNE_STEPS, LEARNING_RATE_CNN, MOMENTUM, NUM_EPISODES, BATCH_SIZE, K, ALPHA, PENALTY, NUM_CNN_LAYERS, GAMMA, LEARNING_RATE_DQN, TAU
+from CONSTANTS import EPSILON_END, EPSILON_START, FINETUNE_STEPS, LEARNING_RATE_CNN, MOMENTUM, NUM_EPISODES, BATCH_SIZE, K, ALPHA, PENALTY, NUM_CNN_LAYERS, GAMMA, LEARNING_RATE_DQN, TAU
 # torch.autograd.set_detect_anomaly(True)
 
 class ReinforcementLearning():
@@ -33,28 +33,36 @@ class ReinforcementLearning():
         self.cnn_optimizer = optim.SGD(self.cnn_model.parameters(), lr=LEARNING_RATE_CNN, momentum=MOMENTUM)
 
     def _predict_action(self, state, layer_idx):
+        self.policy_net.eval()
         with torch.no_grad():
             # t.max(1) will return the largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
             q_values, cur_hidden_state = self.policy_net(state, layer_idx, self.prev_rnn_hidden_state)
             actions = q_values.max(1).indices
-            actions[actions==0] = 1
+            # actions[actions==0] = 1
             return actions, cur_hidden_state
 
     def _e_greedy_actions(self, state, layer_idx):
-        eps_threshold = EPSILON_END + (EPSILON_START - EPSILON_END) * math.exp(-1. * self.steps_done / EPSILON_DECAY)
+        eps_threshold = EPSILON_END + (EPSILON_START - EPSILON_END) * math.exp(-1. * self.steps_done / (NUM_EPISODES/3))
         
-        if random.random() > eps_threshold:
-            return self._predict_action(state, layer_idx)[0]
-        return torch.randint(low = 1, high = K, size=(BATCH_SIZE,), device = self.device)
-
+        # Generate random actions for the entire batch
+        random_actions = torch.randint(low=0, high=K-1, size=(BATCH_SIZE,), device=self.device)
+        
+        # Predict actions using the model (exploitation)
+        predicted_actions = self._predict_action(state, layer_idx)[0]  # Assuming this returns the action tensor
+        
+        # Decide whether to explore or exploit for each action in the batch
+        explore_mask = torch.rand(BATCH_SIZE, device=self.device) < eps_threshold
+        return torch.where(explore_mask, random_actions, predicted_actions)
+    
     def _reward_func(self, action, cur_layer_idx, L_cls = None, alpha = ALPHA, p = PENALTY):
         if cur_layer_idx == NUM_CNN_LAYERS - 1:
             return -alpha*L_cls + action*p
         return action * p
 
     def _optimize_model(self, state_batch, next_state_batch, reward_batch, action_batch, cur_layer_idx):
+        self.policy_net.train()
         state_action_values, cur_hidden_state = self.policy_net(
                                                     state_batch,
                                                     cur_layer_idx - 1,
@@ -63,16 +71,17 @@ class ReinforcementLearning():
         state_action_values = state_action_values.gather(1, action_batch.view(1,-1)).squeeze()
 
         # Compute V(s_{t+1}) for all next states
+        self.target_net.eval()
         with torch.no_grad():
             next_state_values, _ = self.target_net(next_state_batch, cur_layer_idx, cur_hidden_state)
             next_state_values = next_state_values.max(1).values
 
-            # Compute the expected Q values
-            expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-            expected_state_action_values = expected_state_action_values.squeeze()
+        # Compute the expected Q values
+        expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+        expected_state_action_values = expected_state_action_values.squeeze()
 
         # Compute Huber loss
-        criterion = nn.SmoothL1Loss()
+        criterion = nn.MSELoss()
         loss = criterion(state_action_values, expected_state_action_values)
         # Optimize the model
         self.optimizer.zero_grad()
@@ -96,13 +105,14 @@ class ReinforcementLearning():
 
         for ind, a in enumerate(action):
             # Perform pruning
+            a = a.item() + 1
             for name, module in self.cnn_model.named_buffers():
                 if name == f'{self.conv_layers[cur_layer_idx]}.weight_mask':
                     num_of_channels = module.shape[0]
 
                     group_size = num_of_channels/K
-                    x = torch.ones(round(group_size*a.item()), *module.shape[1:])
-                    y = torch.zeros(num_of_channels - round(group_size*a.item()), *module.shape[1:])
+                    x = torch.ones(round(group_size*a), *module.shape[1:])
+                    y = torch.zeros(num_of_channels - round(group_size*a), *module.shape[1:])
                     x = torch.cat((x,y), dim=0).to(self.device)
                     
                     module_to_prune.register_buffer(name='weight_mask', tensor=x, persistent=True)
@@ -211,7 +221,7 @@ class ReinforcementLearning():
             conv_layer = getattr(self.cnn_model, self.conv_layers[i])
 
             group_size = conv_layer.in_channels / K
-            in_channels_mean = int(group_size * mean_action[i])
+            in_channels_mean = int(group_size * (mean_action[i] + 1))
             
             num_of_multiplications = get_multiplications_per_conv_layer(
                                 conv_layer = conv_layer,
@@ -224,8 +234,16 @@ class ReinforcementLearning():
         print("="*50)
         print("Training Deep Q Network!")
         track_loss = []
+        track_L_cls = []
+
         self.steps_done = 0
-        for _ in tqdm(range(NUM_EPISODES)):
+
+        episodes = NUM_EPISODES
+
+        if cur_layer_ind == NUM_CNN_LAYERS - 1:
+            episodes *= 4
+
+        for _ in tqdm(range(episodes)):
             self.steps_done += 1
             # Initialize the environment and get its state
             try:
@@ -255,6 +273,7 @@ class ReinforcementLearning():
                 loss_cnn = loss_fn(y_pred, classes)
 
                 L_cls = loss_cnn.item()
+                track_L_cls.append(L_cls)
 
             # Compute corresponding rewards
             reward = self._reward_func(action, cur_layer_ind, L_cls=L_cls)
@@ -273,7 +292,7 @@ class ReinforcementLearning():
             
             self._soft_update_target_network()
 
-        return track_loss
+        return track_loss, track_L_cls
 
     def finetune_cnn(self):
         print("="*50)
