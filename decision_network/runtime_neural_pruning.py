@@ -18,8 +18,10 @@ class ReinforcementLearning():
     def __init__(self, cnn_model, trainloader, testloader, return_nodes, conv_layers, device):
         self.steps_done = 0
         self.cnn_model = cnn_model
-        self.train_iterator = iter(trainloader)
+        self.trainloader = trainloader
         self.testloader = testloader
+        self.train_iterator = iter(trainloader)
+        
         self.device = device
         self.return_nodes = return_nodes
         self.conv_layers = conv_layers
@@ -226,7 +228,13 @@ class ReinforcementLearning():
         
         for _ in tqdm(range(NUM_EPISODES)):
             # Initialize the environment and get its state
-            inputs, classes = next(self.train_iterator)
+            try:
+                inputs, classes = next(self.train_iterator)
+            except StopIteration:
+                # Reinitialize the iterator when it reaches the end
+                self.train_iterator = iter(self.trainloader)
+                inputs, classes = next(self.train_iterator)
+                
             inputs, classes = inputs.to(self.device), classes.to(self.device)
 
             state = self._continue_forward_pass(inputs, "conv1", self.return_nodes[cur_layer_ind - 1])
@@ -270,7 +278,12 @@ class ReinforcementLearning():
         print("="*50)
         print("Finetuning the CNN With Runtime Neural Pruning!")
         for _ in tqdm(range(FINETUNE_STEPS)):
-            inputs, classes = next(self.train_iterator)
+            try:
+                inputs, classes = next(self.train_iterator)
+            except StopIteration:
+                # Reinitialize the iterator when it reaches the end
+                self.train_iterator = iter(self.trainloader)
+                inputs, classes = next(self.train_iterator)
             inputs, classes = inputs.to(self.device), classes.to(self.device)
 
             y_pred, _ = self._cnn_forward_pass_with_runtime_pruning(inputs, eval=False)

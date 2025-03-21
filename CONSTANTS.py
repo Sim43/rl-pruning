@@ -18,7 +18,7 @@ BATCH_SIZE = 32
 LEARNING_RATE_DQN = 1e-4
 ALPHA = 0.1 # to rescale Lcls into a proper range, since it varies for different networks and tasks. α was set such that the average αLcls is approximately 1
 PENALTY = -0.1 # negative penalty that can be manually set
-NUM_EPISODES = 3 # numer of episodes in RL
+NUM_EPISODES = 3000 # numer of episodes in RL
 TAU = 0.005 # TAU is the update rate of the target network
 
 # CNN
@@ -28,4 +28,4 @@ MOMENTUM = 0.9
 LEARNING_RATE_CNN = 0.001 # Learning rate for the CNN optimizer
 FEATURE_MAP_SIZE = 32
 # CNN Finetune
-FINETUNE_STEPS = 5
+FINETUNE_STEPS = 5000
