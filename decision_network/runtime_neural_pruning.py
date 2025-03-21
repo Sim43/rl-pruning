@@ -6,8 +6,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.utils.prune as prune
 
-from torcheval.metrics.functional import multiclass_accuracy
-
 from decision_network.DQN import DQN
 from utils import get_device, get_multiplications_per_conv_layer
 
@@ -21,7 +19,7 @@ class ReinforcementLearning():
         self.trainloader = trainloader
         self.testloader = testloader
         self.train_iterator = iter(trainloader)
-        
+
         self.device = device
         self.return_nodes = return_nodes
         self.conv_layers = conv_layers
