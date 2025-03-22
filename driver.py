@@ -1,9 +1,13 @@
 import pandas as pd
-from CONSTANTS import NUM_CNN_LAYERS, SEED
+from tqdm import tqdm
+from CONSTANTS import FINETUNE_STEPS, NUM_CNN_LAYERS, NUM_EPISODES, SEED
 
 from utils import get_multiplications_per_conv_layer, load_dataset, get_device, set_random_seed
 from backbone_cnn.cnn_train import get_trained_CNN_model
-from decision_network.runtime_neural_pruning import ReinforcementLearning
+from decision_network.pruner_manager import PrunerManager
+from decision_network.dqn_trainer import DQNTrainer
+from decision_network.cnn_finetuner import CNNFineTuner
+
 from tabulate import tabulate
 
 from torch import nn
@@ -21,7 +25,7 @@ class RuntimeNeuralPruning:
          
         # Load dataset
         self.trainloader, self.testloader = load_dataset()
-
+        self.train_iterator = iter(self.trainloader)
         # Get dimension of images in the dataset. Used to calculate number of multiplications.
         self.img_dim = next(iter(self.trainloader))[0].shape[3]
 
@@ -38,7 +42,11 @@ class RuntimeNeuralPruning:
         self.multiplications_pruned_model = 0
 
         # Initialize the RL Trainer
-        self.decision_network_trainer = ReinforcementLearning(self.model, self.trainloader, self.testloader, self.return_nodes, self.conv_layers, self.device)
+        # self.decision_network_trainer = ReinforcementLearning(self.model, self.trainloader, self.testloader, self.return_nodes, self.conv_layers, self.device)
+        
+        pruner_manager = PrunerManager(cnn_model=self.model, img_dim=self.img_dim, conv_layers=self.conv_layers, return_nodes=self.return_nodes, device=self.device)
+        self.cnn_finetuner = CNNFineTuner(pruner_manager, self.testloader)
+        self.deep_q_net_trainer = DQNTrainer(pruner_manager)
 
     def calculate_original_model_multiplications(self) -> None:
         """
@@ -50,13 +58,35 @@ class RuntimeNeuralPruning:
             self.multiplications_per_layer[ind][0] = get_multiplications_per_conv_layer(conv_layer=conv_layer, output_img_size=self.img_dim)
             self.multiplications_original_model += self.multiplications_per_layer[ind][0]
 
+    def _get_next_batch(self):
+        try:
+            inputs, classes = next(self.train_iterator)
+        except StopIteration:
+            # Reinitialize the iterator when it reaches the end
+            self.train_iterator = iter(self.trainloader)
+            inputs, classes = next(self.train_iterator)
+        inputs, classes = inputs.to(self.device), classes.to(self.device)
+        return inputs, classes
+
     def prune_and_finetune_model(self) -> None:
         """
         Perform Runtime Neural Pruning and model finetuning in an interleaving fashion.
         """
         for i in range(1, NUM_CNN_LAYERS):
-            self.decision_network_trainer.train_q_network(i)
-            self.decision_network_trainer.finetune_cnn()
+            # self.decision_network_trainer.train_q_network(i)
+            episodes = NUM_EPISODES
+
+            if i == NUM_CNN_LAYERS - 1:
+                episodes *= 4
+
+            for _ in tqdm(range(episodes)):
+                inputs, classes = self._get_next_batch()
+                self.deep_q_net_trainer.train_step(inputs, classes, i)
+
+            # self.decision_network_trainer.finetune_cnn()
+            for _ in tqdm(range(FINETUNE_STEPS)):
+                inputs, classes = self._get_next_batch()
+                self.cnn_finetuner.finetune_step(inputs, classes)
     
     def test_models(self) -> None:
         """
@@ -65,7 +95,7 @@ class RuntimeNeuralPruning:
         It retrieves the accuracy of the pruned model and the number of multiplications for each layer.
         Finally, it calls `_display_results` to display the comparison between the original and pruned models.
         """
-        acc_pruned_model, pruned_model_multiplications = self.decision_network_trainer.test_cnn_model_with_runtime_pruning()
+        acc_pruned_model, pruned_model_multiplications = self.cnn_finetuner.test_cnn_model_with_runtime_pruning()
         for ind, multis in enumerate(pruned_model_multiplications):
             self.multiplications_pruned_model += multis
             self.multiplications_per_layer[ind][1] = multis

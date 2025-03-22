@@ -82,7 +82,7 @@ def get_trained_CNN_model(trainloader: DataLoader, testloader: DataLoader, devic
         print(f"Loading pre-trained model from {weights_file_path}")
 
         # Initialize the CNN model with the correct number of in_channels and image dimensions according to the dataset
-        batch = next(iter(trainloader))
+        batch = next(iter(trainloader))[0]
         in_channels, img_size = batch.shape[1], batch.shape[2]
 
         model = CNNModel(in_channels=in_channels, img_size=img_size)
