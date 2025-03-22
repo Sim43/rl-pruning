@@ -1,9 +1,13 @@
+import torch
 import torch.nn as nn
 
 class CNNModel(nn.Module):
-    def __init__(self):
+    """
+    A Convolutional Neural Network (CNN) model for image classification.
+    """
+    def __init__(self, in_channels: int = 1, img_size: int = 28) -> None:
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=(3,3), stride=1, padding=1)
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=(3,3), stride=1, padding=1)
         self.act1 = nn.ReLU()
         self.drop1 = nn.Dropout(0.1)
 
@@ -23,37 +27,38 @@ class CNNModel(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=(2, 2))
 
         self.flat = nn.Flatten()
-        self.fc3 = nn.Linear(6272, 512)
+        self.fc3 = nn.Linear(32*(img_size//2)*(img_size//2), 512)
 
         self.act5 = nn.ReLU()
         self.drop5 = nn.Dropout(0.1)
         
         self.fc4 = nn.Linear(512, 10)
 
-    def forward(self, x):
-        # input 1x28x28, output 64x28x28
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # input: (batch_size, in_channels, img_size, img_size)
         x = self.drop1(self.act1(self.conv1(x)))
 
-        # input 64x28x28, output 128x28x28
+        # input: (batch_size, 64, img_size, img_size)
         x = self.drop2(self.act2(self.conv2(x)))
 
-        # input 128x28x28, output 64x28x28
+        # input: (batch_size, 128, img_size, img_size)
         x = self.drop3(self.act3(self.conv3(x)))
 
-        # input 64x28x28, output 32x28x28
+        # input: (batch_size, 64, img_size, img_size)
         x = self.drop4(self.act4(self.conv4(x)))
 
-        # input 32x28x28, output 32x14x14
+        # input: (batch_size, 32, img_size, img_size)
         x = self.pool(x)
 
-        # input 32x14x14, output 6272
+        # input: (batch_size, 32, img_size//2, img_size//2)
         x = self.flat(x)
         x = self.act5(x)
         x = self.drop5(x)
 
-        # input 6272, output 512
+        # input: (batch_size, 32 * (img_size//2) * (img_size//2))
         x = self.fc3(x)
 
-        # input 512, output 10
+        # input: (batch_size, 512)
         x = self.fc4(x)
+        # output: (batch_size, 10)
         return x

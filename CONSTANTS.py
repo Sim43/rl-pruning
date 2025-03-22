@@ -16,7 +16,7 @@ GAMMA = 0.999 # discount factor
 BATCH_SIZE = 32
 LEARNING_RATE_DQN = 1e-4
 ALPHA = 0.5 # to rescale Lcls into a proper range, since it varies for different networks and tasks. α was set such that the average αLcls is approximately 1
-PENALTY = -0.001 # negative penalty that can be manually set
+PENALTY = -0.001 # negative penalty that can be manually set. Plays a big role in the RL model behavior. Keep it low.
 NUM_EPISODES = 400 # numer of episodes in RL
 TAU = 0.01 # TAU is the update rate of the target network
 
@@ -27,4 +27,4 @@ MOMENTUM = 0.9
 LEARNING_RATE_CNN = 0.001 # Learning rate for the CNN optimizer
 FEATURE_MAP_SIZE = 28
 # CNN Finetune
-FINETUNE_STEPS = 500
+FINETUNE_STEPS = 500 # 3000

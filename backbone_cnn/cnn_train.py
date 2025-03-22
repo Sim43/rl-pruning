@@ -6,9 +6,11 @@ import torch.nn as nn
 import torch.optim as optim
 
 from CONSTANTS import EPOCHS_CNN, MOMENTUM, LEARNING_RATE_CNN
-from cnn import CNNModel
+from backbone_cnn.cnn import CNNModel
+from torch.utils.data import DataLoader
 
-def train_cnn(model, trainloader, testloader, device, epochs = EPOCHS_CNN, lr=LEARNING_RATE_CNN, momentum=MOMENTUM):
+def train_cnn(model: nn.Module, trainloader: DataLoader, testloader: DataLoader, device: torch.device,
+              epochs: int = EPOCHS_CNN, lr: float = LEARNING_RATE_CNN, momentum: float = MOMENTUM):
     """
     Trains the CNN model
 
@@ -17,9 +19,9 @@ def train_cnn(model, trainloader, testloader, device, epochs = EPOCHS_CNN, lr=LE
         trainloader (torch.utils.data.DataLoader): DataLoader for the training dataset.
         testloader (torch.utils.data.DataLoader): DataLoader for the test dataset.
         device (torch.device): The device to perform computations on.
-        epochs (int, optional): Number of epochs to train the model. Defaults to EPOCHS_CNN.
-        lr (float, optional): Learning rate for the optimizer. Defaults to LEARNING_RATE_CNN.
-        momentum (float, optional): Momentum factor for the SGD optimizer. Defaults to MOMENTUM.
+        epochs (int): Number of epochs to train the model. Defaults to EPOCHS_CNN.
+        lr (float): Learning rate for the optimizer. Defaults to LEARNING_RATE_CNN.
+        momentum (float): Momentum factor for the SGD optimizer. Defaults to MOMENTUM.
 
     Returns:
         accuracy (float): Returns the test accuracy of the trained model.
@@ -61,7 +63,8 @@ def train_cnn(model, trainloader, testloader, device, epochs = EPOCHS_CNN, lr=LE
         print("="*50)
     return accuracy
 
-def get_trained_CNN_model(trainloader, testloader, device, weights_file_path = './models/trained_model.pth'):
+def get_trained_CNN_model(trainloader: DataLoader, testloader: DataLoader, device: torch.device,
+                          weights_file_path: str = './models/trained_cnn_model.pth'):
     """
     Load the trained CNN model if weights file exists, else train the model on the dataset.
     
@@ -69,7 +72,7 @@ def get_trained_CNN_model(trainloader, testloader, device, weights_file_path = '
         trainloader (torch.utils.data.DataLoader): DataLoader for the training dataset.
         testloader (torch.utils.data.DataLoader): DataLoader for the test dataset.
         device (torch.device): Device to train the model on.
-        weights_file_path (str, optional): Path to the trained model's weights. Default is './models/trained_model.pth'.
+        weights_file_path (str): Path to the trained model's weights. Default is './models/trained_model.pth'.
 
     Returns:
         model (torch.nn.Module): The trained CNN model.
@@ -78,7 +81,11 @@ def get_trained_CNN_model(trainloader, testloader, device, weights_file_path = '
     if os.path.isfile(weights_file_path):
         print(f"Loading pre-trained model from {weights_file_path}")
 
-        model = CNNModel()
+        # Initialize the CNN model with the correct number of in_channels and image dimensions according to the dataset
+        batch = next(iter(trainloader))
+        in_channels, img_size = batch.shape[1], batch.shape[2]
+
+        model = CNNModel(in_channels=in_channels, img_size=img_size)
         model.load_state_dict(torch.load(weights_file_path, map_location=device))
         model = model.to(device)
 
@@ -96,11 +103,13 @@ def get_trained_CNN_model(trainloader, testloader, device, weights_file_path = '
                 accuracy += (torch.argmax(y_pred, 1) == labels).float().sum()
                 count += len(labels)
         accuracy = round(accuracy.item()/count*100, 2)
+
         print(f"Model Accuracy on Test Set - {accuracy}%")
         print("="*50)
     else:
         print(f"Training a new model and saving it to {weights_file_path}")
         model = CNNModel().to(device)
-        accuracy = train_cnn(model, trainloader, testloader, device) # Model trained inplace
+        accuracy = train_cnn(model, trainloader, testloader, device)
         torch.save(model.state_dict(), weights_file_path)
+
     return model, accuracy

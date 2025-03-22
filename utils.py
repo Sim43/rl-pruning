@@ -3,24 +3,31 @@ import numpy as np
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
 from CONSTANTS import FEATURE_MAP_SIZE, SEED, BATCH_SIZE
-from torch import cuda, device, manual_seed
+from torch import cuda, device, manual_seed, nn
+from typing import Optional, Tuple
 
-def load_dataset(root='./data'):
+def load_dataset(dataset_name: str = "FashionMNIST", root='./data') -> Tuple[DataLoader, DataLoader]:
     """
     Load dataset and create DataLoader objects for training and testing.
 
     Args:
-    dataset (str): Datset to use. Default is FashionMNIST.
+        dataset (str): Dataset to load. Default is FashionMNIST.
         root (str): Root directory where the dataset will be stored. Default is './data'.
 
     Returns:
-        trainloader (DataLoader): DataLoader for the training set.
-        testloader (DataLoader): DataLoader for the test set.
+        Tuple[DataLoader, DataLoader]: A tuple containing:
+            - trainloader: DataLoader for the training set
+            - testloader: DataLoader for the test set
     """
+    if dataset_name in ["FashionMNIST", "CIFAR10"]:
+        dataset_class = getattr(datasets, dataset_name)
+    else:
+        raise ValueError(f"Dataset '{dataset_name}' not supported.")
+    
     transform = transforms.Compose([transforms.ToTensor()])  # Convert images to PyTorch tensors
 
-    trainset = datasets.FashionMNIST(root=root, train=True, download=True, transform=transform)
-    testset = datasets.FashionMNIST(root=root, train=False, download=True, transform=transform)
+    trainset = dataset_class(root=root, train=True, download=True, transform=transform)
+    testset = dataset_class(root=root, train=False, download=True, transform=transform)
 
     # Create separate DataLoaders for training and testing sets
     trainloader = DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
@@ -29,7 +36,7 @@ def load_dataset(root='./data'):
     print(f"The train set contains {len(trainloader)} batches and test set contains {len(testloader)} batches")
     return trainloader, testloader
 
-def get_device():
+def get_device() -> device:
     """
     Get the device to be used (GPU if available, otherwise CPU).
 
@@ -44,7 +51,7 @@ def get_device():
         print("Using CPU for training. Please consider using a GPU for faster training.")
     return selected_device
 
-def set_random_seed(seed = SEED):
+def set_random_seed(seed = SEED) -> None:
     """
     Set the random seed for reproducibility.
 
@@ -54,12 +61,12 @@ def set_random_seed(seed = SEED):
     manual_seed(seed)
     if cuda.is_available():
         cuda.manual_seed_all(seed)
-    random.seed(SEED)
-    np.random.seed(SEED)
+    random.seed(seed)
+    np.random.seed(seed)
 
     print(f"Random seed set to {seed}")
 
-def get_multiplications_per_conv_layer(conv_layer, output_img_size = FEATURE_MAP_SIZE, in_channels = None):
+def get_multiplications_per_conv_layer(conv_layer: nn.Conv2d, output_img_size: int, in_channels: Optional[int] = None) -> int:
     """
     Calculate the number of multiplications in a given convolutional layer.
 

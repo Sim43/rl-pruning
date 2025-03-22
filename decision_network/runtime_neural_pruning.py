@@ -1,5 +1,4 @@
 import math
-import random
 from tqdm import tqdm
 
 import torch
@@ -7,10 +6,10 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.utils.prune as prune
 
-from decision_network.DQN import DQN
+from decision_network.dqn import DQN
 from utils import get_multiplications_per_conv_layer
 
-from CONSTANTS import EPSILON_END, EPSILON_START, FINETUNE_STEPS, LEARNING_RATE_CNN, MOMENTUM, NUM_EPISODES, BATCH_SIZE, K, ALPHA, PENALTY, NUM_CNN_LAYERS, GAMMA, LEARNING_RATE_DQN, TAU
+from CONSTANTS import *
 # torch.autograd.set_detect_anomaly(True)
 
 class ReinforcementLearning():
@@ -20,6 +19,9 @@ class ReinforcementLearning():
         self.trainloader = trainloader
         self.testloader = testloader
         self.train_iterator = iter(trainloader)
+
+        # Get dimension of images in the dataset. Used to calculate number of multiplications.
+        self.img_dim = next(self.train_iterator)[0].shape[3]
 
         self.device = device
         self.return_nodes = return_nodes
@@ -40,7 +42,6 @@ class ReinforcementLearning():
             # found, so we pick action with the larger expected reward.
             q_values, cur_hidden_state = self.policy_net(state, layer_idx, self.prev_rnn_hidden_state)
             actions = q_values.max(1).indices
-            # actions[actions==0] = 1
             return actions, cur_hidden_state
 
     def _e_greedy_actions(self, state, layer_idx):
@@ -225,6 +226,7 @@ class ReinforcementLearning():
             
             num_of_multiplications = get_multiplications_per_conv_layer(
                                 conv_layer = conv_layer,
+                                output_img_size=self.img_dim,
                                 in_channels = in_channels_mean
                             )
             multiplications.append(num_of_multiplications)
