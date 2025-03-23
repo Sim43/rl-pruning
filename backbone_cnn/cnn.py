@@ -6,6 +6,13 @@ class CNNModel(nn.Module):
     A Convolutional Neural Network (CNN) model for image classification.
     """
     def __init__(self, in_channels: int = 1, img_size: int = 28) -> None:
+        """
+        Initialize the CNNModel.
+
+        Args:
+            in_channels (int): Number of input channels. Default is 1 (grayscale).
+            img_size (int): The height/width of the input images. Default is 28.
+        """
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=(3,3), stride=1, padding=1)
         self.act1 = nn.ReLU()
@@ -35,6 +42,15 @@ class CNNModel(nn.Module):
         self.fc4 = nn.Linear(512, 10)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, in_channels, img_size, img_size].
+
+        Returns:
+            torch.Tensor: Output tensor of shape [batch_size, 10], representing the logits for each class.
+        """
         # input: (batch_size, in_channels, img_size, img_size)
         x = self.drop1(self.act1(self.conv1(x)))
 

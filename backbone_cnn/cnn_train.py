@@ -63,29 +63,31 @@ def train_cnn(model: nn.Module, trainloader: DataLoader, testloader: DataLoader,
         print("="*50)
     return accuracy
 
-def get_trained_CNN_model(trainloader: DataLoader, testloader: DataLoader, device: torch.device,
-                          weights_file_path: str = './models/trained_cnn_model.pth'):
+def get_trained_CNN_model(dataset: str ,trainloader: DataLoader, testloader: DataLoader, device: torch.device,
+                          weights_file_path: str = './models/'):
     """
     Load the trained CNN model if weights file exists, else train the model on the dataset.
     
     Args:
+        dataset (str): Name of current dataset.
         trainloader (torch.utils.data.DataLoader): DataLoader for the training dataset.
         testloader (torch.utils.data.DataLoader): DataLoader for the test dataset.
         device (torch.device): Device to train the model on.
-        weights_file_path (str): Path to the trained model's weights. Default is './models/trained_model.pth'.
+        weights_file_path (str): Path to the trained model's weights. Default is './models/'.
 
     Returns:
         model (torch.nn.Module): The trained CNN model.
         accuracy (float): Returns the test accuracy of the trained model.
     """
+    weights_file_path += f"{dataset}_cnn_model.pth"
+
+    # Initialize the CNN model with the correct number of in_channels and image dimensions according to the dataset
+    batch = next(iter(trainloader))[0]
+    in_channels, img_size = batch.shape[1], batch.shape[2]
+    model = CNNModel(in_channels=in_channels, img_size=img_size)
+    
     if os.path.isfile(weights_file_path):
         print(f"Loading pre-trained model from {weights_file_path}")
-
-        # Initialize the CNN model with the correct number of in_channels and image dimensions according to the dataset
-        batch = next(iter(trainloader))[0]
-        in_channels, img_size = batch.shape[1], batch.shape[2]
-
-        model = CNNModel(in_channels=in_channels, img_size=img_size)
         model.load_state_dict(torch.load(weights_file_path, map_location=device))
         model = model.to(device)
 
@@ -108,7 +110,7 @@ def get_trained_CNN_model(trainloader: DataLoader, testloader: DataLoader, devic
         print("="*50)
     else:
         print(f"Training a new model and saving it to {weights_file_path}")
-        model = CNNModel().to(device)
+        model = model.to(device)
         accuracy = train_cnn(model, trainloader, testloader, device)
         torch.save(model.state_dict(), weights_file_path)
 

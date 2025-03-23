@@ -2,7 +2,7 @@ import random
 import numpy as np
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
-from CONSTANTS import FEATURE_MAP_SIZE, SEED, BATCH_SIZE
+from CONSTANTS import SEED, BATCH_SIZE
 from torch import cuda, device, manual_seed, nn
 from typing import Optional, Tuple
 
@@ -33,7 +33,7 @@ def load_dataset(dataset_name: str = "FashionMNIST", root='./data') -> Tuple[Dat
     trainloader = DataLoader(trainset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
     testloader = DataLoader(testset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
-    print(f"The train set contains {len(trainloader)} batches and test set contains {len(testloader)} batches")
+    print(f"Dataset selected: {dataset_name}.\nThe train set contains {len(trainloader)} batches and test set contains {len(testloader)} batches")
     return trainloader, testloader
 
 def get_device() -> device:
@@ -68,7 +68,7 @@ def set_random_seed(seed = SEED) -> None:
 
 def get_multiplications_per_conv_layer(conv_layer: nn.Conv2d, output_img_size: int, in_channels: Optional[int] = None) -> int:
     """
-    Calculate the number of multiplications in a given convolutional layer.
+    Calculate the number of multiplications per image in a given convolutional layer.
 
     Args:
         conv_layer (torch.nn.Conv2d): The convolutional layer.

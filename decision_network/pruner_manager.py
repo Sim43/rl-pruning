@@ -1,11 +1,26 @@
+from typing import List
 import torch
+from torch import nn
 from decision_network.dqn import DQN
 from CONSTANTS import NUM_CNN_LAYERS, K
 from utils import get_multiplications_per_conv_layer
 import torch.nn.utils.prune as prune
 
 class PrunerManager:
-    def __init__(self, cnn_model, img_dim, conv_layers, return_nodes, device):  
+    """
+    A class to manage pruning operations for the CNN model using the trained policy network.
+    """
+    def __init__(self, cnn_model: nn.Module, img_dim: int, conv_layers: List[str], return_nodes: List[str], device: torch.device):
+        """
+        Initialize the PrunerManager.
+
+        Args:
+            cnn_model (nn.Module): The CNN model to be pruned.
+            img_dim (int): The dimension of images in the dataset.
+            conv_layers (List[str]): Names of the convolutional layers in the CNN model.
+            return_nodes (List[str]): Names of the return nodes for intermediate outputs.
+            device (torch.device): The device (CPU or GPU) on which the model and data are loaded.
+        """
         self.cnn_model = cnn_model
         self.conv_layers = conv_layers
         self.return_nodes = return_nodes
@@ -13,7 +28,16 @@ class PrunerManager:
         self.device = device
         self.policy_net = DQN([64,128,64,32]).to(self.device)
 
-    def count_multiplications_in_pruned_model(self, mean_action):
+    def count_multiplications_in_pruned_model(self, mean_action: List[float]) -> List[int]:
+        """
+        Calculate the number of multiplications for each layer in the pruned model.
+
+        Args:
+            mean_action (List[float]): A list of mean actions per batch taken for each layer during pruning.
+
+        Returns:
+            List[int]: A list of number of multiplications for each layer in the pruned model.
+        """
         multiplications = []
         for i in range(NUM_CNN_LAYERS):
             conv_layer = getattr(self.cnn_model, self.conv_layers[i])
@@ -29,7 +53,18 @@ class PrunerManager:
             multiplications.append(num_of_multiplications)
         return multiplications
 
-    def prune_and_get_next_state(self, action, inputs, cur_layer_idx):
+    def prune_and_get_next_state(self, action: torch.Tensor, inputs: torch.Tensor, cur_layer_idx: int) -> torch.Tensor:
+        """
+        Prune the specified layer and generate the next state for the pruned model.
+
+        Args:
+            action (torch.Tensor): The actions taken for pruning.
+            inputs (torch.Tensor): The intermediate input for the current layer.
+            cur_layer_idx (int): The index of the current CNN layer.
+
+        Returns:
+            torch.Tensor: The next state after pruning.
+        """
         next_state_batch = []
 
             # Prune specific channels in the desired layers
@@ -60,7 +95,8 @@ class PrunerManager:
 
         return torch.stack(next_state_batch, dim=0).to(self.device)
     
-    def continue_forward_pass(self, intermediate_output, start_layer, end_layer = "fc4", eval = True):
+    def continue_forward_pass(self, intermediate_output: torch.Tensor, start_layer: str,
+                              end_layer: str = "fc4", eval: bool = True) -> torch.Tensor:
         """
         Continue the forward pass from the intermediate output to the final output.
 
