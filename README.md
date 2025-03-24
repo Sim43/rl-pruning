@@ -3,7 +3,9 @@
   <h3 align="center">A Reproduction of Runtime Neural Pruning</h3>
 
   <p align="center">
-    This repository contains a reproduction of the "Runtime Neural Pruning" method from NeurIPS 2017, aimed at reducing the computational cost of CNNs during inference by dynamically pruning convolutional neural networks.
+    This repository contains a reproduction of <a href="https://papers.nips.cc/paper_files/paper/2017/file/a51fb975227d6640e4fe47854476d133-Paper.pdf" target="_blank">
+      Runtime Neural Pruning (NeurIPS 2017)
+    </a>, aimed at reducing the computational cost of CNNs during inference by dynamically pruning convolutional neural networks.
     <br />
     <br />
   </p>
@@ -42,9 +44,7 @@
 
 ## About The Project
 
-This repository contains the code to reproduce the experiments from the paper "Runtime Neural Pruning" by Ji Lin, Yongming Rao, Jiwen Lu and Jie Zhou, published in the 31st Conference on Neural Information Processing Systems (NIPS 2017). The paper proposes a method for dynamically pruning neural networks during inference, resulting in significant runtime improvements without sacrificing model accuracy.
-
-[Runtime Neural Pruning](https://papers.nips.cc/paper_files/paper/2017/file/a51fb975227d6640e4fe47854476d133-Paper.pdf)
+This repository contains the code to reproduce the experiments from the paper [Runtime Neural Pruning (NeurIPS 2017)](https://papers.nips.cc/paper_files/paper/2017/file/a51fb975227d6640e4fe47854476d133-Paper.pdf) by Ji Lin, Yongming Rao, Jiwen Lu and Jie Zhou, published in the 31st Conference on Neural Information Processing Systems (NIPS 2017). The paper proposes a method for dynamically pruning neural networks during inference, resulting in significant runtime improvements without sacrificing model accuracy. Since no public code was available for this work, I have made the full code publicly accessible to facilitate reproducibility and further research in neural network pruning.
 
 ## Key Features
 - **CNN Pruning via Reinforcement Learning**: Dynamically prunes CNN layers during inference, depending on how complex the input image is.  
