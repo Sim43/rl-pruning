@@ -122,7 +122,12 @@ Once the script runs successfully, you will see a comparison of the original and
 - Total multiplications in the model
 - Test accuracy before and after pruning
 
-### Example Output
+### Output
+Command:
+```sh
+    python driver.py
+```
+Output:
 ```text
 Comparison of Multiplications for processing one image:
 ╒══════════════════╤═══════════╤═══════════╤═══════════╤═══════════╤═══════════╕
