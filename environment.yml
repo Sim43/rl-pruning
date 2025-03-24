@@ -228,4 +228,3 @@ dependencies:
     - datasets==2.18.0
     - pyarrow==15.0.2
     - pyarrow-hotfix==0.6
-    - torcheval==0.0.7
