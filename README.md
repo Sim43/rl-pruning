@@ -74,7 +74,7 @@ Before running the script, make sure you have all dependencies installed. You ca
    ```
 2. Setup and activate your environment
     ```sh
-    conda env create -f requirements.yml
+    conda env create -f environment.yml
     conda activate runtime_neural_pruning
     ```
 ## File Structure
