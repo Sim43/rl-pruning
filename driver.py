@@ -70,10 +70,6 @@ class RuntimeNeuralPruning:
         # Get the trained CNN model
         self.model, self.acc_original_model = get_trained_CNN_model(args.dataset, self.trainloader, self.testloader, self.device)
 
-        # Save the original cnn model
-        torch.save(self.model.state_dict(), "models/original_cnn_model.pth")
-        print("✅ Saved original CNN model to models/original_cnn_model.pth")
-
         # Define return nodes and convolutional layers
         self.conv_layers = [name for name, module in self.model.named_modules() if isinstance(module, nn.Conv2d)]
         self.return_nodes = [f'drop{i+1}' for i in range(len(self.conv_layers))]
