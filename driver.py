@@ -155,7 +155,6 @@ class RuntimeNeuralPruning:
             self.multiplications_pruned_model += multis
             self.multiplications_per_layer[ind][1] = multis
         self._display_results(acc_pruned_model)
-        self.cnn_finetuner.save_model()
 
     def _display_results(self, acc_pruned_model: float) -> None:
         """

@@ -33,10 +33,6 @@ class CNNFineTuner:
         self.return_nodes = return_nodes
         self.device = device
 
-    def save_model(self, path: str = "models/finetuned_cnn_model.pth"):
-        torch.save(self.pruner_manager.cnn_model.state_dict(), path)
-        print(f"✅ Saved fine-tuned CNN model to {path}")
-
     def finetune_step(self, inputs: torch.Tensor, classes: torch.Tensor) -> None:
         """
         Perform one fine-tuning step on the CNN model.

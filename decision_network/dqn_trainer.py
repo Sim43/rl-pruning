@@ -29,7 +29,7 @@ class DQNTrainer:
         self.device = device
 
     def save_model(self, path: str = "models/dqn_model.pth"):
-        torch.save(self.dqn.state_dict(), path)
+        torch.save(self.pruner_manager.policy_net.state_dict(), path)
         print(f"✅ Saved DQN model to {path}")
 
     def predict_action(self, state: torch.Tensor, layer_idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
