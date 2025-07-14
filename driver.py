@@ -3,6 +3,7 @@ from typing import Tuple
 import pandas as pd
 import torch
 from tqdm import tqdm
+import os
 from CONSTANTS import FINETUNE_STEPS, NUM_CNN_LAYERS, NUM_EPISODES, SEED
 
 from utils import get_multiplications_per_conv_layer, load_dataset, get_device, set_random_seed
@@ -68,6 +69,10 @@ class RuntimeNeuralPruning:
 
         # Get the trained CNN model
         self.model, self.acc_original_model = get_trained_CNN_model(args.dataset, self.trainloader, self.testloader, self.device)
+
+        # Save the original cnn model
+        torch.save(self.model.state_dict(), "models/original_cnn_model.pth")
+        print("✅ Saved original CNN model to models/original_cnn_model.pth")
 
         # Define return nodes and convolutional layers
         self.conv_layers = [name for name, module in self.model.named_modules() if isinstance(module, nn.Conv2d)]
@@ -135,6 +140,8 @@ class RuntimeNeuralPruning:
                 self.cnn_finetuner.finetune_step(inputs, classes)
             
             print("="*50)
+        
+        self.deep_q_net_trainer.save_model()
     
     def test_models(self) -> None:
         """
@@ -148,6 +155,7 @@ class RuntimeNeuralPruning:
             self.multiplications_pruned_model += multis
             self.multiplications_per_layer[ind][1] = multis
         self._display_results(acc_pruned_model)
+        self.cnn_finetuner.save_model()
 
     def _display_results(self, acc_pruned_model: float) -> None:
         """
@@ -201,6 +209,8 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     # Parse command-line arguments
     args = parse_args()
+
+    os.makedirs("models", exist_ok=True)
 
     # Override constants with CLI arguments
     NUM_EPISODES = args.num_episodes_rl

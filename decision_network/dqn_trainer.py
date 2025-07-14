@@ -28,6 +28,10 @@ class DQNTrainer:
         self.prev_rnn_hidden_state = None
         self.device = device
 
+    def save_model(self, path: str = "models/dqn_model.pth"):
+        torch.save(self.dqn.state_dict(), path)
+        print(f"✅ Saved DQN model to {path}")
+
     def predict_action(self, state: torch.Tensor, layer_idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict actions for pruning using the policy network.
