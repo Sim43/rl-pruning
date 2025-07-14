@@ -7,7 +7,7 @@ from decision_network.dqn_trainer import DQNTrainer
 from decision_network.cnn_finetuner import CNNFineTuner
 import os
 
-def plot_images(images, titles, ncols=5):
+def plot_images(images, titles, ncols=2):
     plt.figure(figsize=(15, 3))
     for i, (img, title) in enumerate(zip(images, titles)):
         plt.subplot(1, ncols, i+1)
@@ -26,7 +26,7 @@ def main():
     trainloader, testloader = load_dataset(dataset_name="FashionMNIST")
     data_iter = iter(testloader)
     images, labels = next(data_iter)
-    images, labels = images[:5], labels[:5]
+    images, labels = images[:2], labels[:2]
     images, labels = images.to(device), labels.to(device)
 
     # Load original CNN model
